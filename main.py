@@ -1,65 +1,57 @@
 import sys
-# import smtplib  # For email sending (Uncomment if using)
-from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTabWidget, QTextEdit, QFileDialog, QLabel, QMessageBox
+from PyQt5.QtWidgets import QApplication, QWidget, QVBoxLayout, QPushButton, QTabWidget, QTextEdit, QFileDialog, QLabel, QMessageBox, QInputDialog, QLineEdit, QComboBox
 from PyQt5.QtGui import QFont
 from PyQt5.QtCore import Qt
-from file_processor import search_files
-import qdarkstyle
 import csv
-
-# For email sending (Uncomment if using)
-# def send_email():
-#     try:
-#         server = smtplib.SMTP('smtp.gmail.com', 587)
-#         server.starttls()
-#         server.login("your_email", "your_password")
-#         msg = "Subject: Keyword Alert
-#         server.sendmail("from_email", "to_email", msg)
-#         server.quit()
-#         QMessageBox.information(None, 'Success', 'Email sent successfully.')
-#     except Exception as e:
-#         QMessageBox.critical(None, 'Error', f'Could not send email. Error: {e}')
+import qdarkstyle
+from file_processor import update_keywords, search_files, update_keyword_in_db
 
 class KeywordSearchApp(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle('Keyword Search in Text Files')
         layout = QVBoxLayout()
-        
+
         self.label = QLabel('Choose a folder and run the report.')
         self.label.setFont(QFont("Verdana", 14))
         layout.addWidget(self.label)
-        
+
         self.folder_path = ""
         self.chooseDirButton = QPushButton("Choose Directory")
         self.chooseDirButton.setFont(QFont("Verdana", 12))
         self.chooseDirButton.clicked.connect(self.choose_dir)
         layout.addWidget(self.chooseDirButton)
-        
+
         self.runButton = QPushButton("Run Report")
         self.runButton.setFont(QFont("Verdana", 12))
         self.runButton.clicked.connect(self.run_report)
         layout.addWidget(self.runButton)
-        
+
         self.exportButton = QPushButton("Export to CSV")
         self.exportButton.setFont(QFont("Verdana", 12))
         self.exportButton.clicked.connect(self.export_to_csv)
         layout.addWidget(self.exportButton)
-        
+
+        self.categoryComboBox = QComboBox()
+        layout.addWidget(self.categoryComboBox)
+
+        self.keywords = update_keywords()
+
         self.tabs = QTabWidget()
         self.tab_data = {}
-        for prefix in ['cat', 'dog', 'pet']:
+        for prefix in self.keywords.keys():
+            self.categoryComboBox.addItem(prefix)
             tab = QTextEdit()
             tab.setReadOnly(True)
             tab.setFont(QFont("Verdana", 10))
             self.tabs.addTab(tab, prefix.upper())
             self.tab_data[prefix] = tab
-            
-        self.special_dog = QTextEdit()
-        self.special_dog.setReadOnly(True)
-        self.special_dog.setFont(QFont("Verdana", 10))
-        self.tabs.addTab(self.special_dog, 'SPECIAL DOG')
-        
+
+        self.updateKeywordButton = QPushButton("Update Keywords")
+        self.updateKeywordButton.setFont(QFont("Verdana", 12))
+        self.updateKeywordButton.clicked.connect(self.update_keywords_db)
+        layout.addWidget(self.updateKeywordButton)
+
         layout.addWidget(self.tabs)
         self.setLayout(layout)
 
@@ -68,20 +60,20 @@ class KeywordSearchApp(QWidget):
         if self.folder_path:
             self.label.setText(f"Selected Directory: {self.folder_path}")
 
+    def update_keywords_db(self):
+        category = self.categoryComboBox.currentText()
+        keyword, okPressed = QInputDialog.getText(self, "Update Keywords", "Keyword:", QLineEdit.Normal, "")
+        if okPressed and keyword != '':
+            update_keyword_in_db(category.lower(), keyword.lower())
+            self.keywords = update_keywords()
+
     def run_report(self):
-        results = search_files(self.folder_path)
-        alert_keyword_found = False
+        results = search_files(self.folder_path, self.keywords)
         for prefix, tab in self.tab_data.items():
             tab.clear()
             lines = results.get(prefix, [])
             for line in lines:
                 tab.append(line)
-                if prefix == 'dog' and 'specific_keyword' in line:
-                    self.special_dog.append(line)
-                    alert_keyword_found = True
-        # Uncomment if enabling email alerts
-        # if alert_keyword_found:
-        #     send_email()
 
     def export_to_csv(self):
         selected_tab = self.tabs.currentIndex()
@@ -105,4 +97,3 @@ if __name__ == '__main__':
         sys.exit(app.exec_())
     except Exception as e:
         print(f"An error occurred: {e}")
-
